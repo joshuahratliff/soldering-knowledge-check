@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soldering Knowledge Check | Trafera</title>
+<!--
+  Trafera-branded page for the "Soldering Knowledge Check" Copilot Studio agent.
+  Built by Claude for the soldering_knowledge_checker package (see CHANGELOG.md).
+  - Chat: Microsoft Bot Framework Web Chat, connected with an anonymous Direct Line token
+    from the agent's token endpoint (agent uses No authentication).
+  - SCORM 1.2: marks "incomplete" on launch; when the bot posts "You got X out of Y",
+    records score (percent) and "completed". Works without an LMS too (no-op).
+  Brand colours (Trafera Brand Style Guide 2026): navy #2D3351, deep navy #002540,
+  cyan #00AED7, light #EDF1F5. White on cyan fails contrast, so cyan is accent only.
+-->
+<style>
+  :root { --navy:#2D3351; --deep:#002540; --cyan:#00AED7; --blue:#1B8ECE; --light:#EDF1F5; --line:#D5DDE6; }
+  html, body { height:100%; margin:0; }
+  body { background:var(--light); color:var(--navy); font-family:"Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         display:flex; flex-direction:column; overflow:hidden; }
+  header { background:var(--navy); display:flex; align-items:center; gap:14px; padding:10px 18px; flex:0 0 auto; }
+  header img { height:32px; width:auto; display:block; }
+  header .title { color:#A7E1F7; font-size:15px; margin-left:auto; text-align:right; }
+  .watermark { position:fixed; right:-60px; bottom:-40px; width:min(60vw, 520px); opacity:0.07;
+               pointer-events:none; z-index:0; }
+  main { flex:1 1 auto; position:relative; z-index:1; display:flex; justify-content:center; min-height:0; }
+  #webchat { width:100%; max-width:780px; height:100%; }
+  #status { position:absolute; top:40%; left:0; right:0; text-align:center; color:#596680; font-size:15px; }
+  #status a { color:var(--blue); }
+  /* Answer rows: rounded, clickable feel */
+  #webchat .ac-container.ac-selectable { border-radius:10px; cursor:pointer; transition:box-shadow .15s; }
+  #webchat .ac-container.ac-selectable:hover { box-shadow:0 0 0 2px var(--cyan) inset; }
+  #webchat .ac-adaptiveCard { border-radius:12px; }
+  #webchat .webchat__bubble__content { border-radius:12px !important; }
+  #webchat .webchat__send-box { border-top:1px solid var(--line); }
+  @media (max-width:520px) { header .title { font-size:13px; } header img { height:26px; } }
+</style>
+</head>
+<body>
+<header>
+  <img src="trafera-logo-white.png" alt="Trafera">
+  <span class="title">Soldering knowledge check</span>
+</header>
+<img class="watermark" src="trafera-mark.png" alt="">
+<main>
+  <div id="status">Loading the knowledge check…</div>
+  <div id="webchat" role="main"></div>
+</main>
+
+<script src="https://cdn.botframework.com/botframework-webchat/4.18.0/webchat.js"></script>
+<script>
+// ---------- SCORM 1.2 (safe no-op outside an LMS) ----------
+var SCORM = (function () {
+  function findAPI(win) {
+    for (var i = 0; win && i < 12; i++) {
+      try { if (win.API) return win.API; } catch (e) { return null; }
+      if (!win.parent || win.parent === win) break;
+      win = win.parent;
+    }
+    return null;
+  }
+  var api = findAPI(window);
+  if (!api && window.opener) api = findAPI(window.opener);
+  var started = false, done = false;
+  function set(k, v) { try { api.LMSSetValue(k, v); } catch (e) {} }
+  return {
+    start: function () {
+      if (!api || started) return; started = true;
+      try { api.LMSInitialize(""); } catch (e) {}
+      var s = ""; try { s = api.LMSGetValue("cmi.core.lesson_status"); } catch (e) {}
+      if (!s || s === "not attempted") set("cmi.core.lesson_status", "incomplete");
+      try { api.LMSCommit(""); } catch (e) {}
+    },
+    complete: function (score, total) {
+      if (!api || !total) return;
+      set("cmi.core.score.min", "0"); set("cmi.core.score.max", "100");
+      set("cmi.core.score.raw", String(Math.round(100 * score / total)));
+      set("cmi.core.lesson_status", "completed");
+      try { api.LMSCommit(""); } catch (e) {}
+      done = true;
+    },
+    finish: function () {
+      if (!api || !started) return;
+      try { api.LMSCommit(""); api.LMSFinish(""); } catch (e) {}
+      started = false;
+    }
+  };
+})();
+SCORM.start();
+window.addEventListener("pagehide", SCORM.finish);
+window.addEventListener("beforeunload", SCORM.finish);
+
+// ---------- Web Chat ----------
+var TOKEN_URL = "https://default8bf928d84aa5463da770f27a6a565d.13.environment.api.powerplatform.com/powervirtualagents/botsbyschema/new_SolderingKnowledgeCheck/directline/token?api-version=2022-03-01-preview";
+var FALLBACK_URL = "https://copilotstudio.microsoft.com/environments/Default-8bf928d8-4aa5-463d-a770-f27a6a565d13/bots/new_SolderingKnowledgeCheck/webchat?__version__=2";
+
+var styleOptions = {
+  accent: "#1B8ECE",
+  backgroundColor: "transparent",
+  primaryFont: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  botAvatarImage: "trafera-avatar.png",
+  botAvatarInitials: "T",
+  avatarSize: 36,
+  bubbleBackground: "#FFFFFF",
+  bubbleBorderColor: "#D5DDE6",
+  bubbleBorderWidth: 1,
+  bubbleBorderRadius: 12,
+  bubbleTextColor: "#2D3351",
+  bubbleFromUserBackground: "#2D3351",
+  bubbleFromUserTextColor: "#FFFFFF",
+  bubbleFromUserBorderRadius: 12,
+  bubbleFromUserBorderWidth: 0,
+  bubbleMaxWidth: 560,
+  hideUploadButton: true,
+  sendBoxBackground: "#FFFFFF",
+  sendBoxTextColor: "#2D3351",
+  sendBoxButtonColor: "#2D3351",
+  sendBoxPlaceholderColor: "#596680",
+  timestampColor: "#596680",
+  suggestedActionBorderColor: "#1B8ECE",
+  suggestedActionTextColor: "#1B8ECE",
+  rootHeight: "100%",
+  rootWidth: "100%"
+};
+
+function fg(def, sub) { return { "default": def, subtle: sub || "#596680" }; }
+var hostConfig = {
+  fontFamily: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  spacing: { small: 6, "default": 10, medium: 16, large: 20, extraLarge: 28, padding: 12 },
+  containerStyles: {
+    "default": { backgroundColor: "#FFFFFF", foregroundColors: {
+      "default": fg("#2D3351"), accent: fg("#1B8ECE"), good: fg("#1E8A68"), warning: fg("#B4541A"),
+      attention: fg("#C0392B"), dark: fg("#002540"), light: fg("#EDF1F5") } },
+    emphasis: { backgroundColor: "#EDF1F5", foregroundColors: {
+      "default": fg("#2D3351"), accent: fg("#1B8ECE"), good: fg("#1E8A68"), warning: fg("#B4541A"),
+      attention: fg("#C0392B"), dark: fg("#002540"), light: fg("#FFFFFF") } },
+    accent: { backgroundColor: "#E1F4FB", foregroundColors: { "default": fg("#002540"), accent: fg("#1B8ECE") } },
+    good: { backgroundColor: "#E3F6EF", foregroundColors: { "default": fg("#1E5E4A"), good: fg("#1E8A68") } },
+    warning: { backgroundColor: "#FDF1E6", foregroundColors: { "default": fg("#6B3410"), warning: fg("#B4541A") } },
+    attention: { backgroundColor: "#FBE9E7", foregroundColors: { "default": fg("#7A1F15"), attention: fg("#C0392B") } }
+  }
+};
+
+var SCORE_RE = /You got (\d+) out of (\d+)/;
+var store = window.WebChat.createStore({}, function () {
+  return function (next) {
+    return function (action) {
+      if (action.type === "DIRECT_LINE/CONNECT_FULFILLED") {
+        // Ask the agent to run its Conversation Start (greeting) topic.
+        next(action);
+        window.__wcDispatch({ type: "WEB_CHAT/SEND_EVENT", payload: { name: "startConversation", type: "event", value: {} } });
+        return;
+      }
+      if (action.type === "DIRECT_LINE/INCOMING_ACTIVITY") {
+        var act = action.payload && action.payload.activity;
+        if (act && act.from && act.from.role === "bot" && typeof act.text === "string") {
+          var m = SCORE_RE.exec(act.text);
+          if (m) SCORM.complete(Number(m[1]), Number(m[2]));
+        }
+      }
+      return next(action);
+    };
+  };
+});
+window.__wcDispatch = store.dispatch;
+
+function showError() {
+  document.getElementById("status").innerHTML =
+    'The knowledge check couldn’t load here. <a href="' + FALLBACK_URL + '" target="_blank" rel="noopener">Open it in a new window</a>.';
+}
+
+fetch(TOKEN_URL)
+  .then(function (r) { if (!r.ok) throw new Error("token " + r.status); return r.json(); })
+  .then(function (j) {
+    document.getElementById("status").style.display = "none";
+    window.WebChat.renderWebChat({
+      directLine: window.WebChat.createDirectLine({ token: j.token }),
+      store: store,
+      locale: "en-US",
+      styleOptions: styleOptions,
+      adaptiveCardsHostConfig: hostConfig
+    }, document.getElementById("webchat"));
+  })
+  .catch(function () { showError(); });
+</script>
+</body>
+</html>
