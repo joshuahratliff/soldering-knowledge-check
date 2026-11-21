@@ -34,7 +34,17 @@
   #webchat .ac-adaptiveCard { border-radius:12px; }
   #webchat .webchat__bubble__content { border-radius:12px !important; }
   #webchat .webchat__send-box { border-top:1px solid var(--line); }
-  @media (max-width:520px) { header .title { font-size:13px; } header img { height:26px; } }
+  /* Keep cards inside narrow screens */
+  #webchat .webchat__stacked-layout__content { min-width:0 !important; flex:1 1 auto; }
+  #webchat .webchat__stacked-layout__attachment-row,
+  #webchat .webchat__stacked-layout__message-row,
+  #webchat .webchat__stacked-layout__attachment,
+  #webchat .webchat__bubble { max-width:100% !important; min-width:0 !important; }
+  #webchat .ac-adaptiveCard { max-width:100%; box-sizing:border-box; }
+  @media (max-width:520px) {
+    header .title { font-size:13px; } header img { height:26px; }
+    #webchat .webchat__stacked-layout__avatar-gutter { display:none !important; }
+  }
 </style>
 </head>
 <body>
